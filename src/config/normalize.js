@@ -1,5 +1,8 @@
 "use strict";
 
+const path = require("path");
+const { toPackageName } = require("../utils/strings");
+
 /**
  * Turns raw prompt answers into the single normalized configuration object
  * that every generator consumes. Generators must never read prompt answers
@@ -21,8 +24,15 @@ function normalizeConfig(answers) {
   const rateLimitStrategy = bullMQ ? "redis" : answers.rateLimitStrategy || "memory";
   const needsRedis = bullMQ || rateLimitStrategy === "redis";
 
+  // The displayed/used project name always comes from the resolved output directory's basename —
+  // not the raw prompt answer — so "." (current directory), "./backend", and "my-app" all name
+  // the project after where it actually lands instead of after whatever string was typed.
+  const projectName = deriveProjectName(answers.targetDir, answers.projectName);
+  const packageName = toPackageName(projectName);
+
   return {
-    projectName: answers.projectName,
+    projectName,
+    packageName,
     targetDir: answers.targetDir,
     moduleSystem,
     language,
@@ -38,6 +48,14 @@ function normalizeConfig(answers) {
     authentication,
     entityFile: answers.entityFile || null,
   };
+}
+
+function deriveProjectName(targetDir, rawInput) {
+  if (targetDir) {
+    const base = path.basename(path.resolve(targetDir));
+    if (base) return base;
+  }
+  return rawInput;
 }
 
 function normalizeDatabase(db) {

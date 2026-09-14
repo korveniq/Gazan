@@ -82,7 +82,7 @@ function buildPackageJson(config) {
   }
 
   const pkg = {
-    name: config.projectName,
+    name: config.packageName || config.projectName,
     version: "0.1.0",
     private: true,
     type: config.moduleSystem === "mjs" ? "module" : "commonjs",

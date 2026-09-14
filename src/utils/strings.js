@@ -98,6 +98,23 @@ function didYouMean(target, candidates) {
   return bestDistance <= threshold ? best : null;
 }
 
+// npm forbids uppercase, most punctuation, and a leading '.' or '_' in package names — this
+// mirrors those rules so a directory-derived name (e.g. from `.` or `./My Api`) always produces
+// a valid package.json "name" instead of failing `npm install` with an opaque error.
+const NPM_NAME_MAX_LENGTH = 214;
+
+function toPackageName(name) {
+  let out = String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._~-]+/g, "-")
+    .replace(/^[._-]+/, "")
+    .replace(/-+/g, "-")
+    .replace(/-+$/, "");
+  if (!out) out = "app";
+  return out.slice(0, NPM_NAME_MAX_LENGTH);
+}
+
 module.exports = {
   toPascalCase,
   toCamelCase,
@@ -107,4 +124,5 @@ module.exports = {
   pluralize,
   levenshtein,
   didYouMean,
+  toPackageName,
 };

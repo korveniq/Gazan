@@ -32,13 +32,19 @@ function generateAtomically(targetDir, config, entityModel) {
 }
 
 async function resolveTargetDir(projectName) {
+  // path.resolve (never raw string concatenation) already gives '.', './backend', '../backend',
+  // an absolute path, and a plain name ("my-app") exactly the semantics each one should have:
+  // '.' resolves to process.cwd() itself, so GAZAN generates directly INTO the current directory
+  // rather than nesting a new folder inside it.
   let targetDir = path.resolve(process.cwd(), projectName);
 
   for (;;) {
     if (isDirEmpty(targetDir)) return targetDir;
 
+    const isCwd = targetDir === process.cwd();
+    const label = isCwd ? "Current directory" : `Directory "${path.relative(process.cwd(), targetDir) || targetDir}"`;
     const choice = await p.select({
-      message: `Directory "${path.relative(process.cwd(), targetDir) || targetDir}" is not empty.`,
+      message: `${label} is not empty.`,
       options: [
         { value: "cancel", label: "Cancel" },
         { value: "continue", label: "Continue (files may be overwritten)" },
@@ -108,7 +114,8 @@ async function runInit() {
     process.exit(1);
   }
 
-  const relTarget = path.relative(process.cwd(), targetDir) || ".";
+  const relTarget = path.relative(process.cwd(), targetDir);
+  const cdStep = relTarget ? [`  cd ${relTarget}`] : []; // generated directly into the current directory — no cd needed
 
   p.outro(
     [
@@ -116,7 +123,7 @@ async function runInit() {
       "",
       "Next steps:",
       "",
-      `  cd ${relTarget}`,
+      ...cdStep,
       `  npm install`,
       `  npm run dev`,
     ].join("\n")

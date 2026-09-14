@@ -21,14 +21,24 @@ async function runPrompts(defaults = {}) {
   p.intro("GAZAN — backend project initializer");
 
   const projectName = await ask(p.text, {
-    message: "Project name",
-    placeholder: "my-app",
+    message: "Project name/path",
+    placeholder: "my-app  (or '.' for the current directory)",
     initialValue: defaults.projectName,
     validate: (value) => {
-      if (!value) return "Project name is required";
-      if (!/^[a-z0-9][a-z0-9-_]*$/i.test(value)) return "Use letters, digits, - and _ only";
+      if (!value || !value.trim()) return "Project name/path is required";
+      const trimmed = value.trim();
+      // '.', './relative', '../relative', and absolute paths are all valid OUTPUT PATHS — they're
+      // resolved with Node's `path` APIs (never string concatenation) and are not further
+      // restricted here; existing-directory safety is enforced later, once the path is resolved.
+      if (trimmed === "." || trimmed.startsWith("./") || trimmed.startsWith("../") || path.isAbsolute(trimmed)) {
+        return undefined;
+      }
+      if (!/^[a-z0-9][a-z0-9-_]*$/i.test(trimmed)) {
+        return "Use letters, digits, - and _ only, or a path like '.', './backend', '../backend'";
+      }
     },
   });
+  const projectNamePath = projectName.trim();
 
   const moduleSystem = await ask(p.select, {
     message: "Which module system do you want?",
@@ -129,7 +139,7 @@ async function runPrompts(defaults = {}) {
   p.outro("Configuration collected.");
 
   return {
-    projectName,
+    projectName: projectNamePath,
     moduleSystem,
     language,
     aliasesEnabled,
