@@ -12,7 +12,7 @@ runnable Express project from the answers. Nothing you don't select gets generat
 dependencies, no dead directories, no disabled-feature code paths.
 
 ```bash
-npx gazan init
+npx gazan-init init
 ```
 
 ## Why GAZAN?
@@ -59,21 +59,24 @@ depends on. Once generated, the project is a plain Express app with no reference
 
 ## Installation
 
-GAZAN isn't published to npm yet. Run it directly from a clone:
+```bash
+npx gazan-init init
+```
+
+Or install the CLI globally:
+
+```bash
+npm install -g gazan-init
+gazan init
+```
+
+From a local clone:
 
 ```bash
 git clone git@github.com:korveniq/Gazan.git
 cd Gazan
 npm install
 node bin/gazan.js init
-```
-
-Once published, the usual npm workflows will apply:
-
-```bash
-npx gazan init          # run without installing
-npm install -g gazan     # or install the CLI globally
-gazan init
 ```
 
 Requires **Node.js 18 or later** — `gazan` checks this itself at startup and exits with a clear
@@ -673,8 +676,9 @@ dual foreign keys to the same model, many-to-many, and a six-model realistic sch
 **Node.js version** — GAZAN requires Node 18+ (see `engines` in `package.json`) and checks this
 itself at startup, exiting with a clear message on older versions.
 
-**Permission errors installing globally** — prefer `npx gazan init` over `npm install -g gazan`
-if you hit `EACCES` or similar; it avoids global install permissions entirely.
+**Permission errors installing globally** — prefer `npx gazan-init init` over
+`npm install -g gazan-init` if you hit `EACCES` or similar; it avoids global install
+permissions entirely.
 
 **`entity.json` errors** — invalid entity definitions are rejected with field-level validation
 errors (see [entity.json](#entityjson)) before any files are generated, not partway through.
