@@ -1,0 +1,46 @@
+{
+  "models": [
+    {
+      "name": "Employee",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true, "default": "uuid" },
+        "name": { "type": "string", "required": true },
+        "managerId": { "type": "uuid", "required": false, "nullable": true }
+      },
+      "relations": {
+        "manager": { "type": "belongsTo", "model": "Employee", "foreignKey": "managerId" }
+      }
+    },
+    {
+      "name": "User",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true, "default": "uuid" },
+        "name": { "type": "string", "required": true }
+      }
+    },
+    {
+      "name": "Post",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true, "default": "uuid" },
+        "title": { "type": "string", "required": true, "index": true },
+        "authorId": { "type": "uuid", "required": true },
+        "editorId": { "type": "uuid", "required": false, "nullable": true }
+      },
+      "relations": {
+        "author": { "type": "belongsTo", "model": "User", "foreignKey": "authorId" },
+        "editor": { "type": "belongsTo", "model": "User", "foreignKey": "editorId" },
+        "tags": { "type": "belongsToMany", "model": "Tag", "through": "PostTag" }
+      }
+    },
+    {
+      "name": "Tag",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true, "default": "uuid" },
+        "name": { "type": "string", "required": true, "unique": true }
+      },
+      "relations": {
+        "posts": { "type": "belongsToMany", "model": "Post", "through": "PostTag" }
+      }
+    }
+  ]
+}

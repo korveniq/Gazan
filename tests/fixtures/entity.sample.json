@@ -1,0 +1,27 @@
+{
+  "models": [
+    {
+      "name": "User",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true, "default": "uuid" },
+        "name": { "type": "string", "required": true },
+        "email": { "type": "string", "required": true, "unique": true, "index": true },
+        "role": { "type": "enum", "values": ["ADMIN", "MEMBER"], "default": "MEMBER", "required": true },
+        "age": { "type": "number", "required": false, "nullable": true }
+      }
+    },
+    {
+      "name": "Post",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true, "default": "uuid" },
+        "title": { "type": "string", "required": true, "length": 200 },
+        "body": { "type": "text", "required": false },
+        "published": { "type": "boolean", "default": false, "required": true },
+        "authorId": { "type": "uuid", "required": true }
+      },
+      "relations": {
+        "author": { "type": "belongsTo", "model": "User", "foreignKey": "authorId" }
+      }
+    }
+  ]
+}

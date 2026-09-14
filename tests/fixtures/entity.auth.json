@@ -1,0 +1,12 @@
+{
+  "models": [
+    {
+      "name": "User",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true, "default": "uuid" },
+        "email": { "type": "string", "required": true, "unique": true },
+        "password": { "type": "string", "required": true }
+      }
+    }
+  ]
+}
