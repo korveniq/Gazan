@@ -18,7 +18,7 @@ async function ask(fn, opts) {
 }
 
 async function runPrompts(defaults = {}) {
-  p.intro("GAZAN — backend project initializer");
+  p.intro("Let's scaffold your backend.");
 
   const projectName = await ask(p.text, {
     message: "Project name/path",

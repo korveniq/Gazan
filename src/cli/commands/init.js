@@ -13,6 +13,7 @@ const { readEntityFile } = require("../../parser/entity/parse");
 const { EntityValidationError } = require("../../parser/entity/errors");
 const { AliasCollisionError } = require("../../config/aliases");
 const { generate } = require("../../generators");
+const { printBanner } = require("../banner");
 
 /**
  * Generates into a scratch directory first, only copying into `targetDir` once generation
@@ -71,6 +72,7 @@ async function resolveTargetDir(projectName) {
 }
 
 async function runInit() {
+  printBanner();
   const answers = await runPrompts();
 
   const targetDir = await resolveTargetDir(answers.projectName);

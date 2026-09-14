@@ -1,6 +1,6 @@
 {
   "name": "gazan-init",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Interactive CLI that generates production-ready Node.js backend projects — architecture, database, auth, Redis, BullMQ, Socket.IO, and module aliases, all conditional on what you actually select.",
   "keywords": [
     "cli",
