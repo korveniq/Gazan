@@ -4,47 +4,47 @@ const chalk = require("chalk");
 const pkg = require("../../package.json");
 const skullAnsi = require("./skullAnsi");
 
-// Figlet "ANSI Shadow" — dense block letters.
+// Figlet "ANSI Shadow" scaled a bit wider for a bigger wordmark.
 const LETTERS = [
   [
-    " ██████╗ ",
-    "██╔════╝ ",
-    "██║  ███╗",
-    "██║   ██║",
-    "╚██████╔╝",
-    " ╚═════╝ ",
+    "  ██████╗  ",
+    " ██╔════╝  ",
+    " ██║  ███╗ ",
+    " ██║   ██║ ",
+    " ╚██████╔╝ ",
+    "  ╚═════╝  ",
   ],
   [
-    " █████╗ ",
-    "██╔══██╗",
-    "███████║",
-    "██╔══██║",
-    "██║  ██║",
-    "╚═╝  ╚═╝",
+    "  █████╗  ",
+    " ██╔══██╗ ",
+    " ███████║ ",
+    " ██╔══██║ ",
+    " ██║  ██║ ",
+    " ╚═╝  ╚═╝ ",
   ],
   [
-    "███████╗",
-    "╚══███╔╝",
-    "  ███╔╝ ",
-    " ███╔╝  ",
-    "███████╗",
-    "╚══════╝",
+    " ███████╗ ",
+    " ╚══███╔╝ ",
+    "   ███╔╝  ",
+    "  ███╔╝   ",
+    " ███████╗ ",
+    " ╚══════╝ ",
   ],
   [
-    " █████╗ ",
-    "██╔══██╗",
-    "███████║",
-    "██╔══██║",
-    "██║  ██║",
-    "╚═╝  ╚═╝",
+    "  █████╗  ",
+    " ██╔══██╗ ",
+    " ███████║ ",
+    " ██╔══██║ ",
+    " ██║  ██║ ",
+    " ╚═╝  ╚═╝ ",
   ],
   [
-    "███╗   ██╗",
-    "████╗  ██║",
-    "██╔██╗ ██║",
-    "██║╚██╗██║",
-    "██║ ╚████║",
-    "╚═╝  ╚═══╝",
+    " ███╗   ██╗",
+    " ████╗  ██║",
+    " ██╔██╗ ██║",
+    " ██║╚██╗██║",
+    " ██║ ╚████║",
+    " ╚═╝  ╚═══╝",
   ],
 ];
 
@@ -63,18 +63,43 @@ function paint(line, colorFn) {
     .join("");
 }
 
-function printBanner() {
+function visibleLength(text) {
+  return text.replace(/\u001b\[[0-9;]*m/g, "").length;
+}
+
+function padVisible(text, width) {
+  return text + " ".repeat(Math.max(0, width - visibleLength(text)));
+}
+
+function buildTextLines() {
   const rows = LETTERS[0].length;
-
-  console.log("");
+  const lines = [];
   for (let row = 0; row < rows; row += 1) {
-    const line = LETTERS.map((letter, i) => paint(letter[row], LETTER_COLORS[i])).join("  ");
-    console.log(`  ${line}`);
+    lines.push(LETTERS.map((letter, i) => paint(letter[row], LETTER_COLORS[i])).join("  "));
   }
+  return lines;
+}
+
+function printBanner() {
+  const textLines = buildTextLines();
+  const skullLines = skullAnsi;
+  const textWidth = Math.max(...textLines.map(visibleLength));
+  const totalRows = Math.max(textLines.length, skullLines.length);
+  const textOffset = Math.floor((totalRows - textLines.length) / 2);
+  const skullOffset = Math.floor((totalRows - skullLines.length) / 2);
+  const gap = "   ";
 
   console.log("");
-  for (const line of skullAnsi) {
-    console.log(`  ${line}`);
+  for (let row = 0; row < totalRows; row += 1) {
+    const textIdx = row - textOffset;
+    const skullIdx = row - skullOffset;
+    const left =
+      textIdx >= 0 && textIdx < textLines.length
+        ? padVisible(textLines[textIdx], textWidth)
+        : " ".repeat(textWidth);
+    const right =
+      skullIdx >= 0 && skullIdx < skullLines.length ? skullLines[skullIdx] : "";
+    console.log(`  ${left}${gap}${right}`);
   }
 
   console.log("");
