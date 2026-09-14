@@ -1,6 +1,8 @@
 "use strict";
 
-const { isEsm, specifier } = require("../syntax");
+const { isEsm } = require("../syntax");
+const { sharedDir } = require("../paths");
+const { resolveImportPath } = require("../aliasResolver");
 
 /** helpers/bcrypt.{js,ts} — the only place password hashing logic lives. */
 function generateBcryptHelper(config) {
@@ -31,19 +33,20 @@ ${esm ? "export { hashPassword, comparePassword };" : "module.exports = { hashPa
 }
 
 /** helpers/jwt.{js,ts} — access/refresh token signing and verification, centralized. */
-function generateJwtHelper(config) {
+function generateJwtHelper(config, aliasConfig) {
   const esm = isEsm(config);
   const isTs = config.language === "ts";
   const hasRefresh = config.authentication.methods.includes("refresh-token");
+  const fromDir = sharedDir(config, "helpers");
+  // helpers/env is a same-directory sibling of helpers/jwt, so this resolves to "./env" either way.
+  const envPath = resolveImportPath(config, aliasConfig, fromDir, `${fromDir}/env`);
 
   const imports = isTs
     ? `import jwt, { SignOptions } from "jsonwebtoken";`
     : esm
     ? `import jwt from "jsonwebtoken";`
     : `const jwt = require("jsonwebtoken");`;
-  const envImport = esm
-    ? `import { env } from "${specifier(config, "./env")}";`
-    : `const { env } = require("./env");`;
+  const envImport = esm ? `import { env } from "${envPath}";` : `const { env } = require("${envPath}");`;
 
   const expiresInCast = isTs ? " as SignOptions[\"expiresIn\"]" : "";
   const signAccessSig = isTs ? `signAccessToken(payload: object)` : "signAccessToken(payload)";
@@ -83,15 +86,19 @@ ${esm ? `export { ${exportsList.join(", ")} };` : `module.exports = { ${exportsL
 }
 
 /** middlewares/auth.{js,ts} — verifies the Bearer access token and attaches req.user. */
-function generateAuthMiddleware(config) {
+function generateAuthMiddleware(config, aliasConfig) {
   const esm = isEsm(config);
   const isTs = config.language === "ts";
+  const fromDir = sharedDir(config, "middlewares");
+  const jwtPath = resolveImportPath(config, aliasConfig, fromDir, `${sharedDir(config, "helpers")}/jwt`);
+  const errorsPath = resolveImportPath(config, aliasConfig, fromDir, `${sharedDir(config, "helpers")}/errors`);
+
   const jwtImport = esm
-    ? `import { verifyAccessToken } from "${specifier(config, "../helpers/jwt")}";`
-    : `const { verifyAccessToken } = require("../helpers/jwt");`;
+    ? `import { verifyAccessToken } from "${jwtPath}";`
+    : `const { verifyAccessToken } = require("${jwtPath}");`;
   const errorsImport = esm
-    ? `import { UnauthorizedException } from "${specifier(config, "../helpers/errors")}";`
-    : `const { UnauthorizedException } = require("../helpers/errors");`;
+    ? `import { UnauthorizedException } from "${errorsPath}";`
+    : `const { UnauthorizedException } = require("${errorsPath}");`;
   const reqType = isTs ? `import { Request, Response, NextFunction } from "express";\n\n` : "";
   const sig = isTs ? "(req: Request, res: Response, next: NextFunction)" : "(req, res, next)";
 

@@ -2,8 +2,9 @@
 
 const { buildEnvSpec } = require("./env");
 const { getSensitiveFields } = require("./entity/sensitiveFields");
+const { allAliasEntries } = require("../config/aliases");
 
-function buildReadme(config, entityModel) {
+function buildReadme(config, aliasConfig, entityModel) {
   const lines = [];
   lines.push(`# ${config.projectName}`, "");
   lines.push("Generated with [GAZAN](https://github.com/) — an interactive backend project initializer.", "");
@@ -24,6 +25,7 @@ function buildReadme(config, entityModel) {
   if (config.authentication.enabled) {
     lines.push(`- Authentication: ${config.authentication.methods.join(", ")}`);
   }
+  if (aliasConfig && aliasConfig.enabled) lines.push(`- Import aliases: enabled`);
   lines.push("");
 
   if (config.authentication.enabled && config.authentication.methods.includes("oauth")) {
@@ -37,6 +39,31 @@ function buildReadme(config, entityModel) {
   lines.push("```");
   lines.push(...buildStructureTree(config));
   lines.push("```", "");
+
+  if (aliasConfig && aliasConfig.enabled) {
+    lines.push("## Import Aliases", "");
+    lines.push("This project uses module aliases.", "");
+    const entries = Object.entries(allAliasEntries(aliasConfig));
+    const widest = Math.max(...entries.map(([key]) => key.length));
+    for (const [key, target] of entries) {
+      lines.push(`${key.padEnd(widest)}  → ${target}`);
+    }
+    lines.push("");
+    const runtimeNote =
+      config.language === "ts"
+        ? "Resolved via tsconfig `paths` at dev time (`tsx`), and rewritten to relative paths after `tsc` by `tsc-alias` at build time."
+        : config.moduleSystem === "mjs"
+        ? "Resolved at runtime by the generated `alias-loader.mjs`, registered via `node --experimental-loader=./alias-loader.mjs` (already wired into `npm run dev` / `npm start`)."
+        : "Resolved at runtime by `module-alias` (registered as the first line of the entry file) from the `_moduleAliases` field in `package.json`.";
+    lines.push(`> ${runtimeNote}`, "");
+
+    const exampleEntry = entries.find(([key]) => key !== aliasConfig.root) || entries[0];
+    if (exampleEntry) {
+      lines.push("```ts");
+      lines.push(`import x from '${exampleEntry[0]}/example';`);
+      lines.push("```", "");
+    }
+  }
 
   lines.push("## Environment variables", "");
   lines.push("| Variable | Description |", "|---|---|");

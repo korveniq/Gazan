@@ -14,7 +14,7 @@
 
 const path = require("path");
 const fs = require("fs-extra");
-const { execSync } = require("child_process");
+const { execSync, spawn } = require("child_process");
 const { generate } = require("../src/generators");
 const { normalizeConfig } = require("../src/config/normalize");
 const { readEntityFile } = require("../src/parser/entity/parse");
@@ -30,6 +30,7 @@ const ENTITY_REALISTIC = path.join(__dirname, "fixtures", "entity.realistic.json
 const BASE_ANSWERS = {
   moduleSystem: "cjs",
   language: "js",
+  aliasesEnabled: false,
   database: { type: "none" },
   architecture: "mvc",
   useSrc: true,
@@ -321,6 +322,146 @@ const CASES = [
       entityFile: ENTITY_REALISTIC,
     },
   },
+  // --- Module aliases: MVC x (CJS/MJS x JS/TS), HMVC x (CJS/MJS x JS/TS), each DB backend once,
+  // and one full-feature run — every one actually booted, not just type-checked. ---
+  {
+    name: "19-aliases-mvc-cjs-js",
+    answers: { ...BASE_ANSWERS, projectName: "case19", aliasesEnabled: true },
+    extraChecks(dir) {
+      fileMustExist(dir, "jsconfig.json");
+      const pkg = fs.readJsonSync(path.join(dir, "package.json"));
+      if (!pkg._moduleAliases || pkg._moduleAliases["@services"] !== "src/services") {
+        throw new Error("_moduleAliases missing/incorrect for CJS+JS aliases");
+      }
+      if (!pkg.dependencies["module-alias"]) throw new Error("module-alias dependency missing");
+      const server = fs.readFileSync(path.join(dir, "src/server.js"), "utf8");
+      if (!server.startsWith('require("module-alias/register");')) {
+        throw new Error("server.js must require module-alias/register first");
+      }
+      const controller = fs.readFileSync(path.join(dir, "src/app.js"), "utf8");
+      if (controller.includes("../../") ) throw new Error("app.js should not contain deep relative imports when aliases are enabled");
+    },
+    bootCheck: { script: "start", expectHealthy: true },
+  },
+  {
+    name: "20-aliases-mvc-mjs-js",
+    answers: { ...BASE_ANSWERS, projectName: "case20", moduleSystem: "mjs", aliasesEnabled: true },
+    extraChecks(dir) {
+      fileMustExist(dir, "alias-loader.mjs");
+      fileMustExist(dir, "jsconfig.json");
+      const pkg = fs.readJsonSync(path.join(dir, "package.json"));
+      if (!pkg.scripts.start.includes("--experimental-loader=./alias-loader.mjs")) {
+        throw new Error("start script missing the alias loader flag");
+      }
+      if (pkg.dependencies["module-alias"]) throw new Error("module-alias should not be installed for MJS");
+    },
+    bootCheck: { script: "start", expectHealthy: true },
+  },
+  {
+    name: "21-aliases-mvc-cjs-ts",
+    answers: { ...BASE_ANSWERS, projectName: "case21", language: "ts", aliasesEnabled: true },
+    extraChecks(dir) {
+      const tsconfig = fs.readJsonSync(path.join(dir, "tsconfig.json"));
+      if (!tsconfig.compilerOptions.paths || !tsconfig.compilerOptions.paths["@services/*"]) {
+        throw new Error("tsconfig paths missing @services/*");
+      }
+      const pkg = fs.readJsonSync(path.join(dir, "package.json"));
+      if (!pkg.devDependencies["tsc-alias"]) throw new Error("tsc-alias devDependency missing");
+      if (pkg.scripts.build !== "tsc && tsc-alias") throw new Error("build script not updated for tsc-alias");
+    },
+    bootCheck: { expectHealthy: true }, // TS path always uses "start" after build
+  },
+  {
+    name: "22-aliases-mvc-mjs-ts",
+    answers: { ...BASE_ANSWERS, projectName: "case22", moduleSystem: "mjs", language: "ts", aliasesEnabled: true },
+    bootCheck: { expectHealthy: true },
+  },
+  {
+    name: "23-aliases-hmvc-cjs-js-postgres",
+    answers: {
+      ...BASE_ANSWERS,
+      projectName: "case23",
+      architecture: "hmvc",
+      aliasesEnabled: true,
+      database: { type: "postgresql", orm: "prisma" },
+      entityFile: ENTITY_REALISTIC,
+    },
+    extraChecks(dir) {
+      const pkg = fs.readJsonSync(path.join(dir, "package.json"));
+      for (const alias of ["@users", "@posts", "@comments", "@roles", "@categories", "@tags"]) {
+        if (!pkg._moduleAliases[alias]) throw new Error(`expected HMVC module alias '${alias}' to be generated`);
+      }
+      const postService = fs.readFileSync(path.join(dir, "src/modules/post/services/post.service.js"), "utf8");
+      if (!postService.includes('require("@db')) throw new Error("HMVC service should import the db config via @db");
+    },
+    bootCheck: { script: "start", expectHealthy: false }, // no live Postgres — verifying no MODULE_NOT_FOUND
+  },
+  {
+    name: "24-aliases-hmvc-mjs-js",
+    answers: {
+      ...BASE_ANSWERS,
+      projectName: "case24",
+      moduleSystem: "mjs",
+      architecture: "hmvc",
+      aliasesEnabled: true,
+      entityFile: ENTITY_REALISTIC,
+    },
+    bootCheck: { script: "start", expectHealthy: true },
+  },
+  {
+    name: "25-aliases-hmvc-cjs-ts-mongo-native",
+    answers: {
+      ...BASE_ANSWERS,
+      projectName: "case25",
+      language: "ts",
+      architecture: "hmvc",
+      aliasesEnabled: true,
+      database: { type: "mongodb", orm: "native" },
+      entityFile: ENTITY_REALISTIC,
+    },
+    bootCheck: { expectHealthy: false }, // no live Mongo — verifying no MODULE_NOT_FOUND
+  },
+  {
+    name: "26-aliases-hmvc-mjs-ts-mongoose",
+    answers: {
+      ...BASE_ANSWERS,
+      projectName: "case26",
+      moduleSystem: "mjs",
+      language: "ts",
+      architecture: "hmvc",
+      aliasesEnabled: true,
+      database: { type: "mongodb", orm: "mongoose" },
+      entityFile: ENTITY_REALISTIC,
+    },
+    extraChecks(dir) {
+      fileMustExist(dir, "src/models/user.model.ts");
+      const tsconfig = fs.readJsonSync(path.join(dir, "tsconfig.json"));
+      if (!tsconfig.compilerOptions.paths["@models/*"]) throw new Error("expected @models alias for Mongoose");
+    },
+    bootCheck: { expectHealthy: false }, // no live Mongo — verifying no MODULE_NOT_FOUND
+  },
+  {
+    name: "27-aliases-full-feature",
+    answers: {
+      ...BASE_ANSWERS,
+      projectName: "case27",
+      moduleSystem: "mjs",
+      language: "ts",
+      aliasesEnabled: true,
+      database: { type: "postgresql", orm: "prisma" },
+      socketIO: true,
+      bullMQ: true,
+      authentication: { enabled: true, methods: ["email-password", "jwt", "refresh-token"] },
+      entityFile: ENTITY_SAMPLE,
+    },
+    extraChecks(dir) {
+      const tsconfig = fs.readJsonSync(path.join(dir, "tsconfig.json"));
+      for (const alias of ["@/*", "@db/*", "@redis/*", "@socket/*", "@workers/*", "@helpers/*"]) {
+        if (!tsconfig.compilerOptions.paths[alias]) throw new Error(`expected alias '${alias}' in tsconfig paths`);
+      }
+    },
+    bootCheck: { expectHealthy: false }, // no live Postgres/Redis — verifying no MODULE_NOT_FOUND
+  },
 ];
 
 function sh(cmd, cwd) {
@@ -349,6 +490,60 @@ function fileMustExist(dir, rel) {
   if (!fs.existsSync(path.join(dir, rel))) {
     throw new Error(`expected file missing: ${rel}`);
   }
+}
+
+/**
+ * Actually runs the generated project's `npm run <script>` and checks it boots cleanly — not
+ * just that it type-checks. For a no-DB config, the server should reach a healthy /health
+ * response; for a DB-requiring config (no live DB in this sandbox), the process is expected to
+ * exit on a *connection* error, but every module/import in the whole require graph must still
+ * have resolved before that point — so the absence of MODULE_NOT_FOUND / ERR_MODULE_NOT_FOUND
+ * is itself the meaningful assertion (this is exactly what catches broken aliases).
+ */
+async function verifyBoot(dir, npmScript, { expectHealthy }) {
+  const port = 20000 + Math.floor(Math.random() * 20000);
+  const child = spawn("npm", ["run", npmScript, "--silent"], {
+    cwd: dir,
+    env: { ...process.env, PORT: String(port) },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let output = "";
+  child.stdout.on("data", (d) => (output += d.toString()));
+  child.stderr.on("data", (d) => (output += d.toString()));
+  let exited = false;
+  child.on("exit", () => {
+    exited = true;
+  });
+
+  const deadline = Date.now() + 15000;
+  let healthy = false;
+  while (Date.now() < deadline && !exited) {
+    try {
+      const res = await fetch(`http://localhost:${port}/health`, { signal: AbortSignal.timeout(500) });
+      if (res.ok) {
+        const json = await res.json();
+        healthy = json.success === true && json.data && json.data.status === "ok";
+      }
+      break;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+  }
+
+  if (!exited) {
+    child.kill("SIGKILL");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+
+  if (/MODULE_NOT_FOUND|ERR_MODULE_NOT_FOUND/.test(output)) {
+    throw new Error(`module resolution failed during '${npmScript}':\n${output}`);
+  }
+  if (expectHealthy && !healthy) {
+    throw new Error(`expected a healthy /health response from '${npmScript}' but got none:\n${output}`);
+  }
+
+  return { healthy, output };
 }
 
 async function runCase(testCase) {
@@ -388,6 +583,14 @@ async function runCase(testCase) {
   if (config.database.type === "postgresql" && config.database.orm === "prisma") {
     fileMustExist(dir, "prisma/schema.prisma");
     sh("npx prisma validate", dir);
+  }
+
+  if (testCase.bootCheck) {
+    if (config.language === "ts") {
+      sh("npm run build", dir);
+    }
+    const script = config.language === "ts" ? "start" : testCase.bootCheck.script || "start";
+    await verifyBoot(dir, script, { expectHealthy: testCase.bootCheck.expectHealthy });
   }
 
   return { ok: true };

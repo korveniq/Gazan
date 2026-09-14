@@ -1,15 +1,18 @@
 "use strict";
 
-const { isEsm, specifier } = require("../syntax");
+const { isEsm } = require("../syntax");
+const { sharedDir } = require("../paths");
+const { resolveImportPath } = require("../aliasResolver");
 
 /** configs/db/index.{js,ts} — centralized native MongoDB driver client lifecycle. */
-function generateMongoNativeDbConfig(config) {
+function generateMongoNativeDbConfig(config, aliasConfig) {
   const esm = isEsm(config);
   const isTs = config.language === "ts";
+  const fromDir = `${sharedDir(config, "configs")}/db`;
+  const envPath = resolveImportPath(config, aliasConfig, fromDir, `${sharedDir(config, "helpers")}/env`);
+
   const imports = esm ? `import { MongoClient } from "mongodb";` : `const { MongoClient } = require("mongodb");`;
-  const envImport = esm
-    ? `import { env } from "${specifier(config, "../../helpers/env")}";`
-    : `const { env } = require("../../helpers/env");`;
+  const envImport = esm ? `import { env } from "${envPath}";` : `const { env } = require("${envPath}");`;
 
   return `${imports}
 ${envImport}

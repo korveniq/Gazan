@@ -1,32 +1,34 @@
 "use strict";
 
-const { isEsm, specifier } = require("./syntax");
+const { isEsm } = require("./syntax");
+const { baseDir, sharedDir, archDirs } = require("./paths");
+const { resolveImportPath } = require("./aliasResolver");
 
-function generateAppFile(config) {
+function generateAppFile(config, aliasConfig) {
   const esm = isEsm(config);
-  const p = (rel) => specifier(config, rel);
+  const base = baseDir(config);
+  const r = (target) => resolveImportPath(config, aliasConfig, base, target);
 
   const imports = [];
   imports.push(esm ? `import express from "express";` : `const express = require("express");`);
   imports.push(esm ? `import cors from "cors";` : `const cors = require("cors");`);
   imports.push(esm ? `import helmet from "helmet";` : `const helmet = require("helmet");`);
-  imports.push(esm ? `import { env } from "${p("./helpers/env")}";` : `const { env } = require("./helpers/env");`);
+  const envPath = r(`${sharedDir(config, "helpers")}/env`);
+  imports.push(esm ? `import { env } from "${envPath}";` : `const { env } = require("${envPath}");`);
+  const rateLimitPath = r(`${sharedDir(config, "middlewares")}/rate-limit`);
+  imports.push(
+    esm ? `import { rateLimiter } from "${rateLimitPath}";` : `const { rateLimiter } = require("${rateLimitPath}");`
+  );
+  const notFoundPath = r(`${sharedDir(config, "middlewares")}/not-found`);
+  imports.push(esm ? `import { notFound } from "${notFoundPath}";` : `const { notFound } = require("${notFoundPath}");`);
+  const errorHandlerPath = r(`${sharedDir(config, "middlewares")}/error-handler`);
   imports.push(
     esm
-      ? `import { rateLimiter } from "${p("./middlewares/rate-limit")}";`
-      : `const { rateLimiter } = require("./middlewares/rate-limit");`
+      ? `import { errorHandler } from "${errorHandlerPath}";`
+      : `const { errorHandler } = require("${errorHandlerPath}");`
   );
-  imports.push(
-    esm
-      ? `import { notFound } from "${p("./middlewares/not-found")}";`
-      : `const { notFound } = require("./middlewares/not-found");`
-  );
-  imports.push(
-    esm
-      ? `import { errorHandler } from "${p("./middlewares/error-handler")}";`
-      : `const { errorHandler } = require("./middlewares/error-handler");`
-  );
-  imports.push(esm ? `import routes from "${p("./routes/index")}";` : `const routes = require("./routes");`);
+  const routesPath = r(`${sharedDir(config, "routes")}/index`);
+  imports.push(esm ? `import routes from "${routesPath}";` : `const routes = require("${routesPath}");`);
 
   const body = `if (env.NODE_ENV === "production" && env.CORS_ORIGIN === "*") {
   // CORS_ORIGIN="*" is fine for local development but should never ship to production —
@@ -57,42 +59,57 @@ app.use(errorHandler);
   return `${imports.join("\n")}\n\n${body}${footer}`;
 }
 
-function generateServerFile(config) {
+function generateServerFile(config, aliasConfig) {
   const esm = isEsm(config);
   const isTs = config.language === "ts";
-  const p = (rel) => specifier(config, rel);
+  const base = baseDir(config);
+  const r = (target) => resolveImportPath(config, aliasConfig, base, target);
+
+  // CJS+JS is the one combination where aliases need an explicit runtime registration call —
+  // TS relies on tsc-alias (build) / tsx (dev), and MJS+JS on a --experimental-loader flag, but
+  // module-alias must be required before anything else in the process resolves a module.
+  const moduleAliasRegister =
+    aliasConfig && aliasConfig.enabled && config.language === "js" && config.moduleSystem === "cjs"
+      ? `require("module-alias/register");\n\n`
+      : "";
 
   const imports = [];
   imports.push(esm ? `import http from "http";` : `const http = require("http");`);
-  imports.push(esm ? `import app from "${p("./app")}";` : `const app = require("./app");`);
-  imports.push(esm ? `import { env } from "${p("./helpers/env")}";` : `const { env } = require("./helpers/env");`);
+  const appPath = r(`${base}/app`);
+  imports.push(esm ? `import app from "${appPath}";` : `const app = require("${appPath}");`);
+  const envPath = r(`${sharedDir(config, "helpers")}/env`);
+  imports.push(esm ? `import { env } from "${envPath}";` : `const { env } = require("${envPath}");`);
+  const shutdownPath = r(`${sharedDir(config, "utils")}/shutdown`);
   imports.push(
-    esm
-      ? `import { createShutdown } from "${p("./utils/shutdown")}";`
-      : `const { createShutdown } = require("./utils/shutdown");`
+    esm ? `import { createShutdown } from "${shutdownPath}";` : `const { createShutdown } = require("${shutdownPath}");`
   );
+  const processEventsPath = r(`${sharedDir(config, "helpers")}/process-events`);
   imports.push(
     esm
-      ? `import { registerProcessEvents } from "${p("./helpers/process-events")}";`
-      : `const { registerProcessEvents } = require("./helpers/process-events");`
+      ? `import { registerProcessEvents } from "${processEventsPath}";`
+      : `const { registerProcessEvents } = require("${processEventsPath}");`
   );
 
   if (config.database.type !== "none") {
-    imports.push(esm ? `import * as db from "${p("./configs/db/index")}";` : `const db = require("./configs/db");`);
+    const dbPath = r(`${sharedDir(config, "configs")}/db/index`);
+    imports.push(esm ? `import * as db from "${dbPath}";` : `const db = require("${dbPath}");`);
   }
   if (config.redis) {
+    const redisPath = r(`${sharedDir(config, "configs")}/redis/index`);
     imports.push(
-      esm ? `import { redisClient } from "${p("./configs/redis/index")}";` : `const { redisClient } = require("./configs/redis");`
+      esm ? `import { redisClient } from "${redisPath}";` : `const { redisClient } = require("${redisPath}");`
     );
   }
   if (config.socketIO) {
+    const socketPath = r(`${sharedDir(config, "socket")}/index`);
     imports.push(
-      esm ? `import { createSocketServer } from "${p("./socket/index")}";` : `const { createSocketServer } = require("./socket");`
+      esm ? `import { createSocketServer } from "${socketPath}";` : `const { createSocketServer } = require("${socketPath}");`
     );
   }
   if (config.bullMQ) {
+    const workersPath = r(`${sharedDir(config, "workers")}/index`);
     imports.push(
-      esm ? `import { queues, workers } from "${p("./workers/index")}";` : `const { queues, workers } = require("./workers");`
+      esm ? `import { queues, workers } from "${workersPath}";` : `const { queues, workers } = require("${workersPath}");`
     );
   }
 
@@ -140,22 +157,21 @@ start().catch((error) => {
 });
 `;
 
-  return `${imports.join("\n")}\n\n${body}`;
+  return `${moduleAliasRegister}${imports.join("\n")}\n\n${body}`;
 }
 
-function generateRoutesIndex(config, models) {
+function generateRoutesIndex(config, aliasConfig, models) {
   const esm = isEsm(config);
+  const fromDir = sharedDir(config, "routes");
   const imports = [esm ? `import { Router } from "express";` : `const { Router } = require("express");`];
 
   const useLines = [];
   for (const model of models) {
     const varName = `${model.camelName}Routes`;
-    const importPath =
-      config.architecture === "hmvc"
-        ? `../modules/${model.camelName}/routes/${model.kebabName}.routes`
-        : `./${model.kebabName}.routes`;
+    const targetDir = archDirs(config, model.camelName).routes;
+    const importPath = resolveImportPath(config, aliasConfig, fromDir, `${targetDir}/${model.kebabName}.routes`);
     imports.push(
-      esm ? `import ${varName} from "${specifier(config, importPath)}";` : `const ${varName} = require("${importPath}");`
+      esm ? `import ${varName} from "${importPath}";` : `const ${varName} = require("${importPath}");`
     );
     useLines.push(`router.use("/${model.routePath}", ${varName});`);
   }

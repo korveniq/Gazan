@@ -1,14 +1,17 @@
 "use strict";
 
-const { isEsm, specifier } = require("./syntax");
+const { isEsm } = require("./syntax");
+const { sharedDir } = require("./paths");
+const { resolveImportPath } = require("./aliasResolver");
 
-function generateNotFoundMiddleware(config) {
+function generateNotFoundMiddleware(config, aliasConfig) {
   const esm = isEsm(config);
   const isTs = config.language === "ts";
-  const errorsPath = specifier(config, "../helpers/errors");
+  const fromDir = sharedDir(config, "middlewares");
+  const errorsPath = resolveImportPath(config, aliasConfig, fromDir, `${sharedDir(config, "helpers")}/errors`);
   const errorsImport = esm
     ? `import { NotFoundException } from "${errorsPath}";`
-    : `const { NotFoundException } = require("../helpers/errors");`;
+    : `const { NotFoundException } = require("${errorsPath}");`;
   const sig = isTs ? "(req: Request, res: Response, next: NextFunction)" : "(req, res, next)";
   const reqType = isTs ? `import { Request, Response, NextFunction } from "express";\n\n` : "";
 
@@ -22,15 +25,16 @@ ${esm ? "export { notFound };" : "module.exports = { notFound };"}
 `;
 }
 
-function generateErrorHandlerMiddleware(config) {
+function generateErrorHandlerMiddleware(config, aliasConfig) {
   const esm = isEsm(config);
   const isTs = config.language === "ts";
-  const errorsPath = specifier(config, "../helpers/errors");
+  const fromDir = sharedDir(config, "middlewares");
+  const errorsPath = resolveImportPath(config, aliasConfig, fromDir, `${sharedDir(config, "helpers")}/errors`);
   const errorsImport = esm
     ? `import { HTTPException } from "${errorsPath}";`
-    : `const { HTTPException } = require("../helpers/errors");`;
-  const envPath = specifier(config, "../helpers/env");
-  const envImport = esm ? `import { env } from "${envPath}";` : `const { env } = require("../helpers/env");`;
+    : `const { HTTPException } = require("${errorsPath}");`;
+  const envPath = resolveImportPath(config, aliasConfig, fromDir, `${sharedDir(config, "helpers")}/env`);
+  const envImport = esm ? `import { env } from "${envPath}";` : `const { env } = require("${envPath}");`;
   const reqType = isTs ? `import { Request, Response, NextFunction } from "express";\n\n` : "";
   const sig = isTs ? "(err: unknown, req: Request, res: Response, next: NextFunction)" : "(err, req, res, next)";
 
@@ -64,14 +68,15 @@ ${esm ? "export { errorHandler };" : "module.exports = { errorHandler };"}
 `;
 }
 
-function generateValidateMiddleware(config) {
+function generateValidateMiddleware(config, aliasConfig) {
   const esm = isEsm(config);
   const isTs = config.language === "ts";
+  const fromDir = sharedDir(config, "middlewares");
   const zodImport = esm ? `import { ZodType } from "zod";` : "";
-  const errorsPath = specifier(config, "../helpers/errors");
+  const errorsPath = resolveImportPath(config, aliasConfig, fromDir, `${sharedDir(config, "helpers")}/errors`);
   const errorsImport = esm
     ? `import { BadRequestException } from "${errorsPath}";`
-    : `const { BadRequestException } = require("../helpers/errors");`;
+    : `const { BadRequestException } = require("${errorsPath}");`;
   const reqType = isTs ? `import { Request, Response, NextFunction } from "express";\n${zodImport}\n\n` : "";
 
   const sig = isTs
@@ -102,12 +107,13 @@ ${esm ? "export { validate };" : "module.exports = { validate };"}
 `;
 }
 
-function generateRateLimitMiddleware(config) {
+function generateRateLimitMiddleware(config, aliasConfig) {
   const esm = isEsm(config);
   const isTs = config.language === "ts";
+  const fromDir = sharedDir(config, "middlewares");
 
   if (config.rateLimitStrategy === "redis") {
-    const redisPath = specifier(config, "../configs/redis/index");
+    const redisPath = resolveImportPath(config, aliasConfig, fromDir, `${sharedDir(config, "configs")}/redis/index`);
     const imports = esm
       ? [
           `import rateLimit from "express-rate-limit";`,
@@ -117,7 +123,7 @@ function generateRateLimitMiddleware(config) {
       : [
           `const rateLimit = require("express-rate-limit");`,
           `const { RedisStore } = require("rate-limit-redis");`,
-          `const { redisClient } = require("../configs/redis");`,
+          `const { redisClient } = require("${redisPath}");`,
         ];
 
     return `${imports.join("\n")}

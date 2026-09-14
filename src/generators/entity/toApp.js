@@ -1,8 +1,8 @@
 "use strict";
 
-const path = require("path");
-const { isEsm, specifier } = require("../syntax");
-const { sharedDir, relativeImport } = require("../paths");
+const { isEsm } = require("../syntax");
+const { sharedDir } = require("../paths");
+const { resolveImportPath } = require("../aliasResolver");
 const { getSensitiveFields } = require("./sensitiveFields");
 
 function serviceBody(model, config, sensitiveFields) {
@@ -164,39 +164,40 @@ function serviceBody(model, config, sensitiveFields) {
 }`;
 }
 
-function generateService(model, config, dirs) {
+function generateService(model, config, aliasConfig, dirs) {
   const esm = isEsm(config);
   const isTs = config.language === "ts";
   const type = config.database.type;
   const orm = config.database.orm;
+  const fromDir = dirs.services;
+  const r = (target) => resolveImportPath(config, aliasConfig, fromDir, target);
 
   const dbFile = `${sharedDir(config, "configs")}/db/index`;
-  const dbRel = specifier(config, relativeImport(dirs.services, dbFile));
+  const dbPath = r(dbFile);
 
   const imports = [];
   if (type === "postgresql" && orm === "prisma") {
-    imports.push(esm ? `import { prisma } from "${dbRel}";` : `const { prisma } = require("${dbRel}");`);
+    imports.push(esm ? `import { prisma } from "${dbPath}";` : `const { prisma } = require("${dbPath}");`);
     if (isTs) imports.push(`import { PrismaClient, Prisma } from "@prisma/client";`);
   } else if (type === "mongodb" && orm === "mongoose") {
     const modelFile = `${sharedDir(config, "models")}/${model.kebabName}.model`;
-    const modelRel = specifier(config, relativeImport(dirs.services, modelFile));
+    const modelPath = r(modelFile);
     const names = isTs ? `${model.pascalName}, ${model.pascalName}Document` : model.pascalName;
-    imports.push(esm ? `import { ${names} } from "${modelRel}";` : `const { ${names} } = require("${modelRel}");`);
+    imports.push(esm ? `import { ${names} } from "${modelPath}";` : `const { ${names} } = require("${modelPath}");`);
     if (isTs) imports.push(`import { Model } from "mongoose";`);
   } else if (type === "mongodb" && orm === "native") {
-    imports.push(esm ? `import { getDb } from "${dbRel}";` : `const { getDb } = require("${dbRel}");`);
+    imports.push(esm ? `import { getDb } from "${dbPath}";` : `const { getDb } = require("${dbPath}");`);
     imports.push(esm ? `import { randomUUID } from "node:crypto";` : `const { randomUUID } = require("node:crypto");`);
     if (isTs) imports.push(`\ninterface ${model.pascalName}Doc {\n  _id: string;\n  [key: string]: unknown;\n}`);
   }
 
   const sensitiveFields = getSensitiveFields(model);
   if (sensitiveFields.length > 0) {
-    const helperFile = `${sharedDir(config, "helpers")}/strip-sensitive-fields`;
-    const helperRel = specifier(config, relativeImport(dirs.services, helperFile));
+    const helperPath = r(`${sharedDir(config, "helpers")}/strip-sensitive-fields`);
     imports.push(
       esm
-        ? `import { stripSensitiveFields, stripSensitiveFieldsFromList } from "${helperRel}";`
-        : `const { stripSensitiveFields, stripSensitiveFieldsFromList } = require("${helperRel}");`
+        ? `import { stripSensitiveFields, stripSensitiveFieldsFromList } from "${helperPath}";`
+        : `const { stripSensitiveFields, stripSensitiveFieldsFromList } = require("${helperPath}");`
     );
     imports.push(`const SENSITIVE_FIELDS = ${JSON.stringify(sensitiveFields)};`);
   }
@@ -207,16 +208,15 @@ function generateService(model, config, dirs) {
   return `${imports.join("\n")}${imports.length ? "\n\n" : ""}${body}${footer}\n`;
 }
 
-function generateController(model, config, dirs) {
+function generateController(model, config, aliasConfig, dirs) {
   const esm = isEsm(config);
   const isTs = config.language === "ts";
   const reqType = isTs ? `import { Request, Response, NextFunction } from "express";\n` : "";
 
   let serviceImport = "";
   if (isTs) {
-    const serviceFile = path.join(dirs.services, `${model.kebabName}.service`);
-    const serviceRel = specifier(config, relativeImport(dirs.controllers, serviceFile));
-    serviceImport = `import { ${model.pascalName}Service } from "${serviceRel}";\n`;
+    const servicePath = resolveImportPath(config, aliasConfig, dirs.controllers, `${dirs.services}/${model.kebabName}.service`);
+    serviceImport = `import { ${model.pascalName}Service } from "${servicePath}";\n`;
   }
 
   const ctorParam = isTs ? `private readonly service: ${model.pascalName}Service` : "service";
@@ -279,35 +279,30 @@ function generateController(model, config, dirs) {
 ${esm ? "" : `\nmodule.exports = ${model.pascalName}Controller;\n`}`;
 }
 
-function generateRoutes(model, config, dirs) {
+function generateRoutes(model, config, aliasConfig, dirs) {
   const esm = isEsm(config);
-  const isTs = config.language === "ts";
   const routesDir = dirs.routes;
+  const r = (target) => resolveImportPath(config, aliasConfig, routesDir, target);
 
-  const controllerFile = path.join(dirs.controllers, `${model.kebabName}.controller`);
-  const serviceFile = path.join(dirs.services, `${model.kebabName}.service`);
-  const validatorFile = path.join(dirs.validators, `${model.kebabName}.validator`);
-  const validateMiddleware = path.join(sharedDir(config, "middlewares"), "validate");
-
-  const controllerRel = specifier(config, relativeImport(routesDir, controllerFile));
-  const serviceRel = specifier(config, relativeImport(routesDir, serviceFile));
-  const validatorRel = specifier(config, relativeImport(routesDir, validatorFile));
-  const validateRel = specifier(config, relativeImport(routesDir, validateMiddleware));
+  const controllerPath = r(`${dirs.controllers}/${model.kebabName}.controller`);
+  const servicePath = r(`${dirs.services}/${model.kebabName}.service`);
+  const validatorPath = r(`${dirs.validators}/${model.kebabName}.validator`);
+  const validatePath = r(`${sharedDir(config, "middlewares")}/validate`);
 
   const imports = esm
     ? [
         `import { Router } from "express";`,
-        `import { validate } from "${validateRel}";`,
-        `import { ${model.pascalName}Controller } from "${controllerRel}";`,
-        `import { ${model.pascalName}Service } from "${serviceRel}";`,
-        `import { create${model.pascalName}Schema, update${model.pascalName}Schema } from "${validatorRel}";`,
+        `import { validate } from "${validatePath}";`,
+        `import { ${model.pascalName}Controller } from "${controllerPath}";`,
+        `import { ${model.pascalName}Service } from "${servicePath}";`,
+        `import { create${model.pascalName}Schema, update${model.pascalName}Schema } from "${validatorPath}";`,
       ]
     : [
         `const { Router } = require("express");`,
-        `const { validate } = require("${validateRel}");`,
-        `const ${model.pascalName}Controller = require("${controllerRel}");`,
-        `const ${model.pascalName}Service = require("${serviceRel}");`,
-        `const { create${model.pascalName}Schema, update${model.pascalName}Schema } = require("${validatorRel}");`,
+        `const { validate } = require("${validatePath}");`,
+        `const ${model.pascalName}Controller = require("${controllerPath}");`,
+        `const ${model.pascalName}Service = require("${servicePath}");`,
+        `const { create${model.pascalName}Schema, update${model.pascalName}Schema } = require("${validatorPath}");`,
       ];
 
   const body = `const router = Router();

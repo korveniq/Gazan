@@ -1,14 +1,17 @@
 "use strict";
 
-const { isEsm, specifier } = require("../syntax");
+const { isEsm } = require("../syntax");
+const { sharedDir } = require("../paths");
+const { resolveImportPath } = require("../aliasResolver");
 
 /** configs/db/index.{js,ts} — centralized Mongoose connection lifecycle. */
-function generateMongooseDbConfig(config) {
+function generateMongooseDbConfig(config, aliasConfig) {
   const esm = isEsm(config);
+  const fromDir = `${sharedDir(config, "configs")}/db`;
+  const envPath = resolveImportPath(config, aliasConfig, fromDir, `${sharedDir(config, "helpers")}/env`);
+
   const imports = esm ? `import mongoose from "mongoose";` : `const mongoose = require("mongoose");`;
-  const envImport = esm
-    ? `import { env } from "${specifier(config, "../../helpers/env")}";`
-    : `const { env } = require("../../helpers/env");`;
+  const envImport = esm ? `import { env } from "${envPath}";` : `const { env } = require("${envPath}");`;
 
   return `${imports}
 ${envImport}

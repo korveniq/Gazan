@@ -1,19 +1,45 @@
 {
   "name": "gazan",
   "version": "0.1.0",
-  "description": "GAZAN — interactive backend project generator (architecture, database, infrastructure and security scaffolding).",
+  "description": "Interactive CLI that generates production-ready Node.js backend projects — architecture, database, auth, Redis, BullMQ, Socket.IO, and module aliases, all conditional on what you actually select.",
+  "keywords": [
+    "cli",
+    "generator",
+    "scaffolding",
+    "boilerplate",
+    "backend",
+    "express",
+    "prisma",
+    "mongoose",
+    "mongodb",
+    "postgresql",
+    "typescript",
+    "mvc",
+    "hmvc",
+    "code-generator",
+    "project-generator"
+  ],
   "license": "MIT",
+  "author": "Korveniq Technologies",
   "type": "commonjs",
   "bin": {
-    "gazan": "./bin/gazan.js"
+    "gazan": "bin/gazan.js"
   },
-  "main": "src/index.js",
+  "main": "src/generators/index.js",
   "files": [
     "bin",
     "src"
   ],
   "engines": {
     "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/korveniq/Gazan.git"
+  },
+  "homepage": "https://github.com/korveniq/Gazan#readme",
+  "bugs": {
+    "url": "https://github.com/korveniq/Gazan/issues"
   },
   "scripts": {
     "test": "node tests/run.js"

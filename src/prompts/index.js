@@ -46,6 +46,11 @@ async function runPrompts(defaults = {}) {
     ],
   });
 
+  const aliasesEnabled = await ask(p.confirm, {
+    message: "Do you want to enable module/path aliases? (e.g. @/services/x instead of ../../services/x)",
+    initialValue: true,
+  });
+
   const databaseChoice = await ask(p.select, {
     message: "Which database do you want?",
     options: [
@@ -127,6 +132,7 @@ async function runPrompts(defaults = {}) {
     projectName,
     moduleSystem,
     language,
+    aliasesEnabled,
     database,
     architecture,
     useSrc,

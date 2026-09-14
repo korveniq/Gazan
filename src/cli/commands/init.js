@@ -11,6 +11,7 @@ const { normalizeConfig } = require("../../config/normalize");
 const { isDirEmpty } = require("../../utils/fsSafety");
 const { readEntityFile } = require("../../parser/entity/parse");
 const { EntityValidationError } = require("../../parser/entity/errors");
+const { AliasCollisionError } = require("../../config/aliases");
 const { generate } = require("../../generators");
 
 /**
@@ -99,7 +100,11 @@ async function runInit() {
     }
   } catch (error) {
     spinner.stop("Generation failed — target directory left untouched.");
-    p.log.error(error.stack || error.message);
+    if (error instanceof AliasCollisionError) {
+      p.log.error(error.message);
+    } else {
+      p.log.error(error.stack || error.message);
+    }
     process.exit(1);
   }
 

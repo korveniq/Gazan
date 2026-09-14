@@ -27,6 +27,7 @@ function normalizeConfig(answers) {
     moduleSystem,
     language,
     ext,
+    aliases: { enabled: Boolean(answers.aliasesEnabled) },
     database,
     architecture,
     useSrc,
